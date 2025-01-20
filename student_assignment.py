@@ -112,7 +112,7 @@ def generate_hw03(question2, question3):
 def generate_hw04(question):
     pass
     
-# def demo(question):
+def demo(question):
     llm = AzureChatOpenAI(
             model=gpt_config['model_name'],
             deployment_name=gpt_config['deployment_name'],
