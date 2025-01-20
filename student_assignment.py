@@ -35,7 +35,7 @@ def get_hw01_tmp_response(llm: BaseChatModel, question: str):
     output_parser = StructuredOutputParser(response_schemas=holiday_response_schemas)
     holiday_format_instructions = output_parser.get_format_instructions()
     prompt = ChatPromptTemplate.from_messages([
-        ("system","使用台灣語言並回答問題,{format_instructions},只需回答問題內容就好"),
+        ("system","使用台灣語言並回答問題,{format_instructions},只需回答問題內容就好，所有答案放進同個list中"),
         ("human","{question}")])
     prompt = prompt.partial(format_instructions=holiday_format_instructions)
     tmp_response = llm.invoke(prompt.format(question=question)).content
@@ -46,24 +46,24 @@ def get_tmp_result(llm: BaseChatModel, result: str):
         ResponseSchema(
             name="Result",
             description="json的格式內容",
-            type="list"
         )
     ]
 
     json_output_parser = StructuredOutputParser(response_schemas=format_response_schemas)
     json_format_instructions = json_output_parser.get_format_instructions()
     prompt = ChatPromptTemplate.from_messages([
-        ("system","將提供的內容轉成指定的json內容做輸出,{format_instructions}"),
+        ("system","將提供的json內容整理為指定的json內容做輸出, {format_instructions}, 不要增加額外資訊"),
         ("human","{question}")])
     prompt = prompt.partial(format_instructions=json_format_instructions)
-    tmp_result = llm.invoke(prompt.format(question=question)).content
+    tmp_result = llm.invoke(prompt.format(question=result)).content
     return tmp_result
 
 def generate_hw01(question):
     llm = get_openAI_llm()
     tmp_response = get_hw01_tmp_response(llm, question)
-    tmp_result = get_tmp_result(llm, tmp_response)
     #print({tmp_response})
+    tmp_result = get_tmp_result(llm, tmp_response)
+    #print({tmp_result})
     examples = [
         {"input": """```json
                     {
@@ -94,12 +94,12 @@ def generate_hw01(question):
 
     final_prompt = ChatPromptTemplate.from_messages(
         [
-            ("system", "依照我提供的文字內容仔細比對範例進行處理"),
+            ("system", "依照我提供的文字內容仔細比對範例進行處理，去除開頭與結尾應該不需要的字串"),
             few_shot_prompt,
             ("human", "{input}"),
         ]
     )
-    response = llm.invoke(final_prompt.format(input={tmp_response})).content
+    response = llm.invoke(final_prompt.format(input={tmp_result})).content
     return response
 
     
