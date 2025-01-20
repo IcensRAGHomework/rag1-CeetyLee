@@ -99,7 +99,7 @@ def get_trim_json_result(llm: BaseChatModel, result: str):
             ("human", "{input}"),
         ]
     )
-    response = llm.invoke(final_prompt.format(input={result})).content
+    response = llm.invoke(final_prompt.format(input=result)).content
     return response
 
 def generate_hw01(question):
@@ -138,7 +138,7 @@ def generate_hw01(question):
 
     final_prompt = ChatPromptTemplate.from_messages(
         [
-            ("system", "依照我提供的文字內容仔細比對範例進行處理，去除開頭與結尾應該不需要的字串，其他"),
+            ("system", "依照我提供的文字內容仔細比對範例進行處理，去除開頭與結尾應該不需要的字串"),
             few_shot_prompt,
             ("human", "{input}"),
         ]
