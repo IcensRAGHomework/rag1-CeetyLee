@@ -4,6 +4,7 @@ import traceback
 from model_configurations import get_model_configuration
 
 from langchain_openai import AzureChatOpenAI
+from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import HumanMessage
 from langchain.prompts import ChatPromptTemplate, FewShotChatMessagePromptTemplate
 from langchain.output_parsers import (ResponseSchema, StructuredOutputParser)
@@ -11,8 +12,8 @@ from langchain.output_parsers import (ResponseSchema, StructuredOutputParser)
 gpt_chat_version = 'gpt-4o'
 gpt_config = get_model_configuration(gpt_chat_version)
 
-def generate_hw01(question):
-    llm = AzureChatOpenAI(
+def get_openAI_llm():
+    return AzureChatOpenAI(
             model=gpt_config['model_name'],
             deployment_name=gpt_config['deployment_name'],
             openai_api_key=gpt_config['api_key'],
@@ -21,7 +22,8 @@ def generate_hw01(question):
             temperature=gpt_config['temperature']
     )
 
-    hw1_response_schemas = [
+def get_hw01_tmp_response(llm: BaseChatModel, question: str):
+    holiday_response_schemas = [
         ResponseSchema(
             name="date",
             description="該紀念日的日期",
@@ -30,27 +32,53 @@ def generate_hw01(question):
             name="name",
             description="該紀念日的名稱")
     ]
-    output_parser = StructuredOutputParser(response_schemas=hw1_response_schemas)
-    hw1_format_instructions = output_parser.get_format_instructions()
+    output_parser = StructuredOutputParser(response_schemas=holiday_response_schemas)
+    holiday_format_instructions = output_parser.get_format_instructions()
     prompt = ChatPromptTemplate.from_messages([
-        ("system","使用台灣語言並回答問題,{format_instructions}"),
+        ("system","使用台灣語言並回答問題,{format_instructions},只需回答問題內容就好"),
         ("human","{question}")])
-    prompt = prompt.partial(format_instructions=hw1_format_instructions)
+    prompt = prompt.partial(format_instructions=holiday_format_instructions)
     tmp_response = llm.invoke(prompt.format(question=question)).content
+    return tmp_response
 
-    sample_string1 = '''
-                \"data\": \"2024-04-04\",
-                \"name\": \"兒童節\"    
-                '''
-    sample_string12 = '''
-                \"data\": \"2024-04-05\",
-                \"name\": \"清明節\"    
-                '''
-
-    examples = [
-        {"input": "``` json {sample_string1} ```", "output": "\"Result\": [ {sample_string1} ]"},
-        {"input": "``` json {sample_string2} ```", "output": "\"Result\": [ {sample_string2} ]"},
+def get_tmp_result(llm: BaseChatModel, result: str):
+    format_response_schemas = [
+        ResponseSchema(
+            name="Result",
+            description="json的格式內容",
+            type="list"
+        )
     ]
+
+    json_output_parser = StructuredOutputParser(response_schemas=format_response_schemas)
+    json_format_instructions = json_output_parser.get_format_instructions()
+    prompt = ChatPromptTemplate.from_messages([
+        ("system","將提供的內容轉成指定的json內容做輸出,{format_instructions}"),
+        ("human","{question}")])
+    prompt = prompt.partial(format_instructions=json_format_instructions)
+    tmp_result = llm.invoke(prompt.format(question=question)).content
+    return tmp_result
+
+def generate_hw01(question):
+    llm = get_openAI_llm()
+    tmp_response = get_hw01_tmp_response(llm, question)
+    tmp_result = get_tmp_result(llm, tmp_response)
+    #print({tmp_response})
+    examples = [
+        {"input": """```json
+                    {
+                        "Result": [ 
+                            content 
+                        ]
+                    }   
+                    ```""",
+        "output": """{
+                        "Result": [ 
+                            content 
+                        ]
+                    }"""},
+    ]
+    
     example_prompt = ChatPromptTemplate.from_messages(
         [
             ("human", "{input}"),
@@ -66,7 +94,7 @@ def generate_hw01(question):
 
     final_prompt = ChatPromptTemplate.from_messages(
         [
-            ("system", "你是能夠將json格式變更的人才"),
+            ("system", "依照我提供的文字內容仔細比對範例進行處理"),
             few_shot_prompt,
             ("human", "{input}"),
         ]
