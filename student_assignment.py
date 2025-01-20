@@ -1,5 +1,7 @@
 import json
 import traceback
+import requests
+import base64
 
 from model_configurations import get_model_configuration
 
@@ -11,6 +13,8 @@ from langchain.output_parsers import (ResponseSchema, StructuredOutputParser)
 
 gpt_chat_version = 'gpt-4o'
 gpt_config = get_model_configuration(gpt_chat_version)
+
+calendarific_api = "ZMfZRia1MUjMfgqoOxZLRsQeLG2u24dM"
 
 def get_openAI_llm():
     return AzureChatOpenAI(
@@ -46,6 +50,7 @@ def get_tmp_result(llm: BaseChatModel, result: str):
         ResponseSchema(
             name="Result",
             description="json的格式內容",
+            type="list"
         )
     ]
 
@@ -58,12 +63,7 @@ def get_tmp_result(llm: BaseChatModel, result: str):
     tmp_result = llm.invoke(prompt.format(question=result)).content
     return tmp_result
 
-def generate_hw01(question):
-    llm = get_openAI_llm()
-    tmp_response = get_hw01_tmp_response(llm, question)
-    #print({tmp_response})
-    tmp_result = get_tmp_result(llm, tmp_response)
-    #print({tmp_result})
+def get_trim_json_result(llm: BaseChatModel, result: str):
     examples = [
         {"input": """```json
                     {
@@ -94,14 +94,62 @@ def generate_hw01(question):
 
     final_prompt = ChatPromptTemplate.from_messages(
         [
-            ("system", "依照我提供的文字內容仔細比對範例進行處理，去除開頭與結尾應該不需要的字串"),
+            ("system", "依照我提供的文字內容仔細比對範例進行處理，記得去除開頭與結尾應該不需要的字串"),
             few_shot_prompt,
             ("human", "{input}"),
         ]
     )
-    response = llm.invoke(final_prompt.format(input={tmp_result})).content
+    response = llm.invoke(final_prompt.format(input={result})).content
     return response
 
+def generate_hw01(question):
+    llm = get_openAI_llm()
+    tmp_response = get_hw01_tmp_response(llm, question)
+    # print(tmp_response)
+    tmp_result = get_tmp_result(llm, tmp_response)
+    # print(tmp_result)
+    examples = [
+        {"input": """```json
+                    {
+                        "Result": [ 
+                            content 
+                        ]
+                    }   
+                    ```""",
+        "output": """{
+                        "Result": [ 
+                            content 
+                        ]
+                    }"""},
+    ]
+    
+    example_prompt = ChatPromptTemplate.from_messages(
+        [
+            ("human", "{input}"),
+            ("ai", "{output}"),
+        ]
+    )
+    few_shot_prompt = FewShotChatMessagePromptTemplate(
+        example_prompt=example_prompt,
+        examples=examples,
+    )
+
+#    print(few_shot_prompt.invoke({}).to_messages())
+
+    final_prompt = ChatPromptTemplate.from_messages(
+        [
+            ("system", "依照我提供的文字內容仔細比對範例進行處理，去除開頭與結尾應該不需要的字串，其他"),
+            few_shot_prompt,
+            ("human", "{input}"),
+        ]
+    )
+    response = llm.invoke(final_prompt.format(input=tmp_result)).content
+    # response = get_tmp_result(llm, tmp_result)
+    return response
+
+def get_holiday_from_calend_api():
+
+    pass
     
 def generate_hw02(question):
     pass
