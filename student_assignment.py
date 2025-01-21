@@ -20,6 +20,7 @@ gpt_chat_version = 'gpt-4o'
 gpt_config = get_model_configuration(gpt_chat_version)
 
 calendarific_api = "ZMfZRia1MUjMfgqoOxZLRsQeLG2u24dM"
+history = ChatMessageHistory()
 
 def get_openAI_llm():
     return AzureChatOpenAI(
@@ -105,15 +106,61 @@ def get_format_result(llm: BaseChatModel, result: str):
     response = llm.invoke(final_prompt.format(input=tmp_result)).content
     return response
 
-def generate_hw01(question):
-    llm = get_openAI_llm()
-    tmp_response = get_holiday_tmp_response(llm, question)
-    # print(tmp_response)
-    response = get_format_result(llm, tmp_response)
-    return response
+def get_hw03_format_result(llm: BaseChatModel, result: str):
+    format_response_schemas = [
+        ResponseSchema(
+            name="Result",
+            description="json的格式內容",
+        )
+    ]
+
+    json_output_parser = StructuredOutputParser(response_schemas=format_response_schemas)
+    json_format_instructions = json_output_parser.get_format_instructions()
+    prompt = ChatPromptTemplate.from_messages([
+        ("system","將提供的json內容整理為指定的json內容做輸出, {format_instructions}, 不要增加額外資訊"),
+        ("human","{question}")])
+    prompt = prompt.partial(format_instructions=json_format_instructions)
+    tmp_result = llm.invoke(prompt.format(question=result)).content
+
+    examples = [
+        {"input": """```json
+                    {
+                        "Result": [ 
+                            content 
+                        ]
+                    }   
+                    ```""",
+        "output": """{
+                        "Result": [ 
+                            content 
+                        ]
+                    }"""},
+    ]
     
-def generate_hw02(question):
-    llm = get_openAI_llm()
+    example_prompt = ChatPromptTemplate.from_messages(
+        [
+            ("human", "{input}"),
+            ("ai", "{output}"),
+        ]
+    )
+    few_shot_prompt = FewShotChatMessagePromptTemplate(
+        example_prompt=example_prompt,
+        examples=examples,
+    )
+
+#    print(few_shot_prompt.invoke({}).to_messages())
+
+    final_prompt = ChatPromptTemplate.from_messages(
+        [
+            ("system", "依照我提供的文字內容仔細比對範例進行處理，記得去除開頭與結尾應該不需要的字串"),
+            few_shot_prompt,
+            ("human", "{input}"),
+        ]
+    )
+    response = llm.invoke(final_prompt.format(input=tmp_result)).content
+    return response
+
+def get_agent(llm: BaseChatModel):
     def get_holiday_value(year: int, month: int) -> str:
         url = f"https://calendarific.com/api/v2/holidays?&api_key={calendarific_api}&country=tw&year={year}&month={month}"
         response = requests.get(url)
@@ -138,7 +185,30 @@ def generate_hw02(question):
     agent = create_openai_functions_agent(llm, tools, prompt)
     agent_executor = AgentExecutor(agent=agent, tools=tools)
     # agent_executor.invoke is for hw02
-    response = agent_executor.invoke({"input": question}).get('output')
+    # response = agent_executor.invoke({"input": question}).get('output')
+    # below is for hw02/hw03
+    def get_history() -> ChatMessageHistory:
+        return history
+    
+    agent_with_chat_history = RunnableWithMessageHistory(
+        agent_executor,
+        get_history,
+        input_messages_key="input",
+        history_messages_key="chat_history",
+    )
+    return agent_with_chat_history
+
+def generate_hw01(question):
+    llm = get_openAI_llm()
+    tmp_response = get_holiday_tmp_response(llm, question)
+    # print(tmp_response)
+    response = get_format_result(llm, tmp_response)
+    return response
+    
+def generate_hw02(question):
+    llm = get_openAI_llm()
+    agent = get_agent(llm)
+    response = agent.invoke({"input": question}).get('output')
 
     # below is hw01
     tmp_response = get_holiday_tmp_response(llm, response)
@@ -149,41 +219,7 @@ def generate_hw02(question):
 def generate_hw03(question2, question3):
     generate_hw02(question2)
     llm = get_openAI_llm()
-    def get_holiday_value(year: int, month: int) -> str:
-        url = f"https://calendarific.com/api/v2/holidays?&api_key={calendarific_api}&country=tw&year={year}&month={month}"
-        response = requests.get(url)
-        response = response.json()
-        response = response.get('response')
-        return response
-    
-    class GetHolidayValue(BaseModel):
-        year: int = Field(description="specific year of holiday")
-        month: int = Field(description="specific month of holiday")
-
-    tool = StructuredTool.from_function(
-        name="get_holiday_value",
-        description="get holiday form calendarific api",
-        func=get_holiday_value,
-        args_schema=GetHolidayValue,
-    )
-
-    prompt = hub.pull("hwchase17/openai-functions-agent")
-    
-    tools = [tool]
-    agent = create_openai_functions_agent(llm, tools, prompt)
-    agent_executor = AgentExecutor(agent=agent, tools=tools)
-
-    # below is for hw03
-    history = ChatMessageHistory()
-    def get_history() -> ChatMessageHistory:
-        return history
-    
-    agent_with_chat_history = RunnableWithMessageHistory(
-        agent_executor,
-        get_history,
-        input_messages_key="input",
-        history_messages_key="chat_history",
-    )
+    agent = get_agent(llm)
 
     response_schemas = [
         ResponseSchema(
@@ -199,11 +235,11 @@ def generate_hw03(question2, question3):
     output_parser = StructuredOutputParser(response_schemas=response_schemas)
     hw3_format_instructions = output_parser.get_format_instructions()
     prompt = ChatPromptTemplate.from_messages([
-        ("system","使用台灣語言並回答問題,{format_instructions},只需回答問題內容就好，所有答案放進同個list中"),
+        ("system","使用台灣語言並回答問題,{format_instructions},只需回答問題內容就好,所有答案放進同個list中"),
         ("human","{question}")])
     prompt = prompt.partial(format_instructions=hw3_format_instructions)
-    tmp_response = agent_with_chat_history.invoke({"input": prompt.format_messages(question=question3)}).get('output')
-    response = get_format_result(llm, tmp_response)
+    tmp_response = agent.invoke({"input": prompt.format_messages(question=question3)}).get('output')
+    response = get_hw03_format_result(llm, tmp_response)
     return response
     
 def generate_hw04(question):
