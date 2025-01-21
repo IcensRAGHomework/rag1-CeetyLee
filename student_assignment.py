@@ -111,6 +111,7 @@ def get_hw03_format_result(llm: BaseChatModel, result: str):
         ResponseSchema(
             name="Result",
             description="json的格式內容",
+            type="list"
         )
     ]
 
@@ -131,9 +132,8 @@ def get_hw03_format_result(llm: BaseChatModel, result: str):
                     }   
                     ```""",
         "output": """{
-                        "Result": [ 
+                        "Result": 
                             content 
-                        ]
                     }"""},
     ]
     
@@ -152,7 +152,7 @@ def get_hw03_format_result(llm: BaseChatModel, result: str):
 
     final_prompt = ChatPromptTemplate.from_messages(
         [
-            ("system", "依照我提供的文字內容仔細比對範例進行處理，記得去除開頭與結尾應該不需要的字串"),
+            ("system", "依照我提供的文字內容仔細比對範例進行處理，記得保留格式以及去除不需要的字串或符號"),
             few_shot_prompt,
             ("human", "{input}"),
         ]
@@ -235,10 +235,11 @@ def generate_hw03(question2, question3):
     output_parser = StructuredOutputParser(response_schemas=response_schemas)
     hw3_format_instructions = output_parser.get_format_instructions()
     prompt = ChatPromptTemplate.from_messages([
-        ("system","使用台灣語言並回答問題,{format_instructions},只需回答問題內容就好,所有答案放進同個list中"),
+        ("system","使用台灣語言並回答問題,{format_instructions}"),
         ("human","{question}")])
     prompt = prompt.partial(format_instructions=hw3_format_instructions)
     tmp_response = agent.invoke({"input": prompt.format_messages(question=question3)}).get('output')
+    # response = get_format_result(llm, tmp_response)
     response = get_hw03_format_result(llm, tmp_response)
     return response
     
