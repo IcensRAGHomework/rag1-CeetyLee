@@ -1,6 +1,7 @@
 import json
 import traceback
 import requests
+import base64
 
 from model_configurations import get_model_configuration
 
@@ -15,6 +16,7 @@ from langchain_core.tools import StructuredTool
 from pydantic import BaseModel, Field
 from langchain_community.chat_message_histories import ChatMessageHistory
 from langchain_core.runnables.history import RunnableWithMessageHistory
+from mimetypes import guess_type
 
 gpt_chat_version = 'gpt-4o'
 gpt_config = get_model_configuration(gpt_chat_version)
@@ -242,9 +244,53 @@ def generate_hw03(question2, question3):
     # response = get_format_result(llm, tmp_response)
     response = get_hw03_format_result(llm, tmp_response)
     return response
+
+def local_image_to_data_url(image_path):
+    # Guess the MIME type of the image based on the file extension
+    mime_type, _ = guess_type(image_path)
+    if mime_type is None:
+        # Default MIME type if none is found
+        mime_type = 'application/octet-stream'
+    
+    # Read and encode the image file
+    with open(image_path, "rb") as image_file:
+        base64_encode_data = base64.b64encode(image_file.read()).decode('utf-8')
+
+    # Construct the data URL
+    return f"data:{mime_type};base64,{base64_encode_data}"
     
 def generate_hw04(question):
-    pass
+    llm = get_openAI_llm()
+    image_path = 'baseball.png'
+    data_url = local_image_to_data_url(image_path)
+
+    response_schemas = [
+        ResponseSchema(
+            name="score",
+            description="請解析提供的圖片檔案, 並回答圖片中指定隊伍的積分",
+            type="integer"
+        )
+    ]
+    output_parser = StructuredOutputParser(response_schemas=response_schemas)
+    hw4_format_instructions = output_parser.get_format_instructions()
+    prompt = ChatPromptTemplate.from_messages([
+        ("system","請辨識圖片中的文字表格,{format_instructions}"),
+        (
+            "user",
+            [
+                {
+                    "type": "image_url",
+                    "image_url": {"url": data_url}
+                }
+            ],
+        ),
+        ("human","{question}")])
+    prompt = prompt.partial(format_instructions=hw4_format_instructions)
+    tmp_response = llm.invoke({"input": prompt.format_messages(question=question)}).get('output')
+    # response = get_format_result(llm, tmp_response)
+    response = get_hw03_format_result(llm, tmp_response)
+    return response    
+
     
 def demo(question):
     llm = AzureChatOpenAI(
@@ -268,5 +314,6 @@ def demo(question):
 
 # question = "2025年台灣4月紀念日有哪些?"
 # answer = generate_hw01(question)
-answer = generate_hw03('2024年台灣10月紀念日有哪些?', '根據先前紀錄的節日清單中，這個節日{"date": "10-31", "name": "蔣公誕辰紀念日"}是否有在該月份清單')
+# answer = generate_hw03('2024年台灣10月紀念日有哪些?', '根據先前紀錄的節日清單中，這個節日{"date": "10-31", "name": "蔣公誕辰紀念日"}是否有在該月份清單')
+answer = generate_hw04('請問中華台北的積分是多少')
 print(answer)
