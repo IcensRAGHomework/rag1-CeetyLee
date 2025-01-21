@@ -286,7 +286,7 @@ def generate_hw04(question):
         ),
         ("human","{question}")])
     prompt = prompt.partial(format_instructions=hw4_format_instructions)
-    tmp_response = llm.invoke({"input": prompt.format_messages(question=question)}).get('output')
+    tmp_response = llm.invoke(prompt.format_messages(question=question)).content
     # response = get_format_result(llm, tmp_response)
     response = get_hw03_format_result(llm, tmp_response)
     return response    
@@ -315,5 +315,6 @@ def demo(question):
 # question = "2025年台灣4月紀念日有哪些?"
 # answer = generate_hw01(question)
 # answer = generate_hw03('2024年台灣10月紀念日有哪些?', '根據先前紀錄的節日清單中，這個節日{"date": "10-31", "name": "蔣公誕辰紀念日"}是否有在該月份清單')
-answer = generate_hw04('請問中華台北的積分是多少')
+question = "請問中華台北的積分是多少"
+answer = generate_hw04(question)
 print(answer)
