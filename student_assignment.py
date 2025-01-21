@@ -1,7 +1,6 @@
 import json
 import traceback
 import requests
-import base64
 
 from model_configurations import get_model_configuration
 
@@ -10,6 +9,10 @@ from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import HumanMessage
 from langchain.prompts import ChatPromptTemplate, FewShotChatMessagePromptTemplate
 from langchain.output_parsers import (ResponseSchema, StructuredOutputParser)
+from langchain.agents import AgentExecutor, create_openai_functions_agent
+from langchain import hub
+from langchain_core.tools import StructuredTool
+from pydantic import BaseModel, Field
 
 gpt_chat_version = 'gpt-4o'
 gpt_config = get_model_configuration(gpt_chat_version)
@@ -26,7 +29,7 @@ def get_openAI_llm():
             temperature=gpt_config['temperature']
     )
 
-def get_hw01_tmp_response(llm: BaseChatModel, question: str):
+def get_holiday_tmp_response(llm: BaseChatModel, question: str):
     holiday_response_schemas = [
         ResponseSchema(
             name="date",
@@ -104,7 +107,76 @@ def get_trim_json_result(llm: BaseChatModel, result: str):
 
 def generate_hw01(question):
     llm = get_openAI_llm()
-    tmp_response = get_hw01_tmp_response(llm, question)
+    tmp_response = get_holiday_tmp_response(llm, question)
+    # print(tmp_response)
+    tmp_result = get_tmp_result(llm, tmp_response)
+    # print(tmp_result)
+    examples = [
+        {"input": """```json
+                    {
+                        "Result": [ 
+                            content 
+                        ]
+                    }   
+                    ```""",
+        "output": """{
+                        "Result": [ 
+                            content 
+                        ]
+                    }"""},
+    ]
+    
+    example_prompt = ChatPromptTemplate.from_messages(
+        [
+            ("human", "{input}"),
+            ("ai", "{output}"),
+        ]
+    )
+    few_shot_prompt = FewShotChatMessagePromptTemplate(
+        example_prompt=example_prompt,
+        examples=examples,
+    )
+
+#    print(few_shot_prompt.invoke({}).to_messages())
+
+    final_prompt = ChatPromptTemplate.from_messages(
+        [
+            ("system", "依照我提供的文字內容仔細比對範例進行處理，去除開頭與結尾應該不需要的字串"),
+            few_shot_prompt,
+            ("human", "{input}"),
+        ]
+    )
+    response = llm.invoke(final_prompt.format(input=tmp_result)).content
+    # response = get_tmp_result(llm, tmp_result)
+    return response
+    
+def generate_hw02(question):
+    llm = get_openAI_llm()
+    def get_holiday_value(year: int, month: int) -> str:
+        url = f"https://calendarific.com/api/v2/holidays?&api_key={calendarific_api}&country=tw&year={year}&month={month}"
+        response = requests.get(url)
+        response = response.json()
+        response = response.get('response')
+        return response
+    
+    class GetHolidayValue(BaseModel):
+        year: int = Field(description="specific year of holiday")
+        month: int = Field(description="specific month of holiday")
+
+    tool = StructuredTool.from_function(
+        name="get_holiday_value",
+        description="get holiday form calendarific api",
+        func=get_holiday_value,
+        args_schema=GetHolidayValue,
+    )
+
+    prompt = hub.pull("hwchase17/openai-functions-agent")
+    
+    tools = [tool]
+    agent = create_openai_functions_agent(llm, tools, prompt)
+    agent_executor = AgentExecutor(agent=agent, tools=tools)
+    response = agent_executor.invoke({"input": question}).get('output')
+    tmp_response = get_holiday_tmp_response(llm, response)
     # print(tmp_response)
     tmp_result = get_tmp_result(llm, tmp_response)
     # print(tmp_result)
@@ -147,12 +219,6 @@ def generate_hw01(question):
     # response = get_tmp_result(llm, tmp_result)
     return response
 
-def get_holiday_from_calend_api():
-
-    pass
-    
-def generate_hw02(question):
-    pass
     
 def generate_hw03(question2, question3):
     pass
@@ -181,5 +247,5 @@ def demo(question):
 # print(demo("你好，使用繁體中文").content)
 
 question = "2025年台灣4月紀念日有哪些?"
-answer = generate_hw01(question)
+answer = generate_hw02(question)
 print(answer)
