@@ -108,7 +108,7 @@ def get_format_result(llm: BaseChatModel, result: str):
     response = llm.invoke(final_prompt.format(input=tmp_result)).content
     return response
 
-def get_hw03_format_result(llm: BaseChatModel, result: str):
+def get_hw_format_result(llm: BaseChatModel, result: str):
     format_response_schemas = [
         ResponseSchema(
             name="Result",
@@ -242,7 +242,7 @@ def generate_hw03(question2, question3):
     prompt = prompt.partial(format_instructions=hw3_format_instructions)
     tmp_response = agent.invoke({"input": prompt.format_messages(question=question3)}).get('output')
     # response = get_format_result(llm, tmp_response)
-    response = get_hw03_format_result(llm, tmp_response)
+    response = get_hw_format_result(llm, tmp_response)
     return response
 
 def local_image_to_data_url(image_path):
@@ -288,7 +288,7 @@ def generate_hw04(question):
     prompt = prompt.partial(format_instructions=hw4_format_instructions)
     tmp_response = llm.invoke(prompt.format_messages(question=question)).content
     # response = get_format_result(llm, tmp_response)
-    response = get_hw03_format_result(llm, tmp_response)
+    response = get_hw_format_result(llm, tmp_response)
     return response    
 
     
